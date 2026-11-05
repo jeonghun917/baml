@@ -1,0 +1,911 @@
+{
+  "format": "readfirst/map@1",
+  "groups": [
+    {
+      "id": "lang-compiler",
+      "title": "New BAML language compiler front end: parse, HIR, type inference, diagnostics, salsa database, formatter, LSP, stdlib (baml_builtins2) and the shared baml_tests corpus",
+      "files": [
+        "baml_language/crates/baml_base/**",
+        "baml_language/crates/baml_builtins2/**",
+        "baml_language/crates/baml_builtins2_codegen/**",
+        "baml_language/crates/baml_compiler2_ast/**",
+        "baml_language/crates/baml_compiler2_emit/**",
+        "baml_language/crates/baml_compiler2_hir/**",
+        "baml_language/crates/baml_compiler2_hir_ty/**",
+        "baml_language/crates/baml_compiler2_metrics/**",
+        "baml_language/crates/baml_compiler2_mir/**",
+        "baml_language/crates/baml_compiler2_rust/**",
+        "baml_language/crates/baml_compiler2_visualization/**",
+        "baml_language/crates/baml_compiler_diagnostics/**",
+        "baml_language/crates/baml_compiler_lexer/**",
+        "baml_language/crates/baml_compiler_parser/**",
+        "baml_language/crates/baml_compiler_syntax/**",
+        "baml_language/crates/baml_db/**",
+        "baml_language/crates/baml_fmt/**",
+        "baml_language/crates/baml_fmt_wasm/**",
+        "baml_language/crates/baml_ide/**",
+        "baml_language/crates/baml_linker/**",
+        "baml_language/crates/baml_linker_types/**",
+        "baml_language/crates/baml_lsp/**",
+        "baml_language/crates/baml_lsp_server/**",
+        "baml_language/crates/baml_sdkgen_types/**",
+        "baml_language/crates/baml_test_support/**",
+        "baml_language/crates/baml_tests/**",
+        "baml_language/crates/baml_type/**",
+        "baml_language/crates/baml_type_macros/**",
+        "baml_language/crates/baml_type_runtime/**"
+      ],
+      "checks": [
+        {
+          "run": "cd baml_language && cargo nextest run -p baml_tests",
+          "why": "the shared BAML test corpus and IR goldens (baml_tests/README.md)"
+        },
+        {
+          "run": "cd baml_language && mise run fmt-stdlib",
+          "why": "stdlib .baml files are formatter-clean (mise.toml fmt-stdlib)"
+        },
+        {
+          "run": "cd baml_language && mise run clippy",
+          "why": "workspace lints with -D warnings (mise.toml)"
+        },
+        {
+          "run": "cd baml_language && mise run type-quiz-test",
+          "why": "generated type-quiz programs through the compiler (mise.toml)"
+        }
+      ],
+      "risks": [
+        {
+          "text": "A new type-error variant must be added in two crates: its message in baml_compiler2_hir_ty/src/diagnostics.rs and its DiagnosticId/rendering in baml_db/src/check.rs; missing one of them loses or mislabels the diagnostic (history 3caf4c1, 2143382 - diagnostics.rs:289,1404; check.rs:2040,2149).",
+          "files": [
+            "baml_language/crates/baml_compiler2_hir_ty/src/diagnostics.rs",
+            "baml_language/crates/baml_db/src/check.rs"
+          ]
+        },
+        {
+          "text": "Inference that reads a still-unsolved inference variable silently finalizes it as Error with no diagnostic, and the program miscompiles or panics later at emission; generics and operator receivers must be resolved before member lookup (history 3caf4c1 - infer.rs:8808-8822).",
+          "files": [
+            "baml_language/crates/baml_compiler2_hir_ty/src/infer.rs",
+            "baml_language/crates/baml_compiler2_hir_ty/src/infer/obligations.rs"
+          ]
+        },
+        {
+          "text": "Operator checks deliberately skip Error and inference-variable operands to avoid cascading errors, but not `unknown`; changing that filter changes which errors users see (history 9dbb5f4 for `?.` on nullable scrutinees - infer.rs:5698-5706).",
+          "files": [
+            "baml_language/crates/baml_compiler2_hir_ty/src/infer.rs"
+          ]
+        },
+        {
+          "text": "The deferred_operator_receiver.baml fixture is the regression test for the generic-operator-receiver panic (\"indirect calls require an explicit caller layout\"); deleting or weakening it removes the only guard (history 3caf4c1 - deferred_operator_receiver.baml:1-5).",
+          "files": [
+            "baml_language/crates/baml_tests/baml_src/ns_deferred_operator_receiver/**"
+          ]
+        },
+        {
+          "text": "Rust tests that call baml_db setup_test_db re-derive the whole stdlib in every nextest process; use the baml_test_support prefixed helpers, which splice in the stdlib compiled at build time (TEST_INSTRUCTIONS.md \"Rust tests: import the prefixed compile helpers\")."
+        }
+      ]
+    },
+    {
+      "id": "lang-runtime",
+      "title": "New BAML language runtime: bex VM, engine, heap, SAP, FFI bridges, sys_* host operations and the baml CLI",
+      "files": [
+        "baml_language/crates/baml/**",
+        "baml_language/crates/baml_artifact/**",
+        "baml_language/crates/baml_cli/**",
+        "baml_language/crates/baml_env/**",
+        "baml_language/crates/baml_exec/**",
+        "baml_language/crates/baml_pack_host/**",
+        "baml_language/crates/baml_path/**",
+        "baml_language/crates/baml_project_root/**",
+        "baml_language/crates/baml_release/**",
+        "baml_language/crates/baml_version/**",
+        "baml_language/crates/bcs_api/**",
+        "baml_language/crates/bex_cache/**",
+        "baml_language/crates/bex_chunkedringbuffer/**",
+        "baml_language/crates/bex_engine/**",
+        "baml_language/crates/bex_events/**",
+        "baml_language/crates/bex_external_types/**",
+        "baml_language/crates/bex_heap/**",
+        "baml_language/crates/bex_project/**",
+        "baml_language/crates/bex_resource_types/**",
+        "baml_language/crates/bex_sap/**",
+        "baml_language/crates/bex_str/**",
+        "baml_language/crates/bex_vm/**",
+        "baml_language/crates/bex_vm_types/**",
+        "baml_language/crates/bridge_cffi/**",
+        "baml_language/crates/bridge_ctypes/**",
+        "baml_language/crates/bridge_encode/**",
+        "baml_language/crates/bridge_wasm/**",
+        "baml_language/crates/sys_auth/**",
+        "baml_language/crates/sys_glob/**",
+        "baml_language/crates/sys_native/**",
+        "baml_language/crates/sys_ops/**",
+        "baml_language/crates/sys_regex/**",
+        "baml_language/crates/sys_types/**",
+        "baml_language/crates/sys_wasm/**"
+      ],
+      "checks": [
+        {
+          "run": "cd baml_language && cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude \"sdk_test_*\" --exclude baml_bridge",
+          "why": "the workspace tests CI runs for runtime crates (cargo-tests.reusable.yaml:128)"
+        },
+        {
+          "run": "cd baml_language && mise run clippy-wasm",
+          "why": "wasm-supported crates stay free of SystemTime/Instant (mise.toml)"
+        },
+        {
+          "run": "cd baml_language && mise run clippy",
+          "why": "workspace lints with -D warnings (mise.toml)"
+        },
+        {
+          "run": "cd baml_language && mise run size-gate",
+          "why": "artifact sizes against the baseline (mise.toml)"
+        }
+      ],
+      "risks": [
+        {
+          "text": "Each BexThread has a 10 MiB stack budget counting frames and slots; going past it fails the VM thread, so deep-recursion changes and tests must stay under it (history 3039309 - bex_vm/src/vm/frame_stack.rs:19, re-exported vm.rs:183).",
+          "files": [
+            "baml_language/crates/bex_vm/src/vm.rs",
+            "baml_language/crates/bex_vm/src/vm/**"
+          ]
+        },
+        {
+          "text": "Registering a root call must reject an already-cancelled call under the same lock that call-ID cancellation takes; cleanup bodies deliberately skip that check. Moving either check out of the lock brings back the all_settled cancellation race (history 166bbc0 - the reject_cancelled check at bex_engine/src/lib.rs:617, after the active_calls lock taken at :591-612).",
+          "files": [
+            "baml_language/crates/bex_engine/src/lib.rs"
+          ]
+        },
+        {
+          "text": "Bad Boundary telemetry settings (level, empty key, bad URL) must become an InvalidConfiguration diagnostic that disables recording with a warning; returning an error instead makes SDK load fail for the user (history 0c11e94 - bex_engine/src/telemetry.rs:174,285-321,637).",
+          "files": [
+            "baml_language/crates/bex_engine/src/telemetry.rs"
+          ]
+        },
+        {
+          "text": "Native HTTP clients are cached per (connect timeout, proxy and CA environment variables), at most 32, cleared on overflow; a new environment input reqwest reads must be added to HTTP_CLIENT_ENV or the cached client goes stale (history 4da8e1d - sys_native/src/io_impls.rs:2962,3007).",
+          "files": [
+            "baml_language/crates/sys_native/src/io_impls.rs"
+          ]
+        },
+        {
+          "text": "Subprocess kill goes through a per-process kill channel and the child is spawned with kill_on_drop(false), so dropping a handle does not kill the child; the baml wrapper depends on this API (history 591d6d1 - io_impls.rs:1374,1467,1894).",
+          "files": [
+            "baml_language/crates/sys_native/src/io_impls.rs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lang-telemetry",
+      "title": "btel_* crates: recording, snapshots and delivery of BAML telemetry to the cloud (BCS), plus baml query over it",
+      "files": [
+        "baml_language/crates/baml_query_btel/**",
+        "baml_language/crates/btel_bcs/**",
+        "baml_language/crates/btel_clock/**",
+        "baml_language/crates/btel_file/**",
+        "baml_language/crates/btel_processor/**",
+        "baml_language/crates/btel_reader/**",
+        "baml_language/crates/btel_recorder/**",
+        "baml_language/crates/btel_records/**",
+        "baml_language/crates/btel_ringbuffer/**",
+        "baml_language/crates/btel_settings/**",
+        "baml_language/crates/btel_snapshot/**",
+        "baml_language/crates/btel_types/**"
+      ],
+      "checks": [
+        {
+          "run": "cd baml_language && cargo nextest run -p btel_bcs",
+          "why": "delivery config and plan tests (delivery.rs tests)"
+        },
+        {
+          "run": "cd baml_language && mise run clippy",
+          "why": "workspace lints with -D warnings (mise.toml)"
+        }
+      ],
+      "risks": [
+        {
+          "text": "Shutdown delivery is bounded: after shutdown_timeout (5s) pending data is dropped with ShutdownTimeout, and the worker runtime is not dropped while a DNS lookup hangs; unbounding it lets an unreachable endpoint hold the user process open (history a09a719 - btel_bcs/src/delivery.rs:116-145,1099-1105).",
+          "files": [
+            "baml_language/crates/btel_bcs/src/delivery.rs"
+          ]
+        },
+        {
+          "text": "The delivery reqwest client is built without explicit proxy settings so it follows the environment proxy (HTTPS_PROXY etc.); adding no_proxy() or a custom transport breaks users behind a proxy (history f6b65b3 - delivery.rs:1097).",
+          "files": [
+            "baml_language/crates/btel_bcs/src/delivery.rs"
+          ]
+        },
+        {
+          "text": "Sensitive request headers such as proxy-authorization are scrubbed in the delivery plan; a new header carrying credentials must be added to that list or it leaks into recordings (btel_bcs/src/plan.rs:129).",
+          "files": [
+            "baml_language/crates/btel_bcs/src/plan.rs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lang-sdks",
+      "title": "Per-language SDK generators (sdkgen_*), bridge crates for each host language, and the sdk_tests suites",
+      "files": [
+        "baml_language/sdks/**",
+        "baml_language/sdk_tests/**"
+      ],
+      "checks": [
+        {
+          "run": "cd baml_language && cargo test -p sdkgen_rust",
+          "why": "Rust SDK generator unit tests, including alias-cycle boxing (sdkgen_rust/src/lib.rs:816)"
+        }
+      ],
+      "risks": [
+        {
+          "text": "The Rust SDK box-cycle analysis counts type aliases as containment edges; a class that reaches itself through an alias needs a Box or the generated code does not compile (history 83c3abe - sdkgen_rust/src/analyze.rs:362-366, tests lib.rs:816,892; emit/type_alias.rs).",
+          "files": [
+            "baml_language/sdks/rust/sdkgen_rust/src/analyze.rs",
+            "baml_language/sdks/rust/sdkgen_rust/src/emit/type_alias.rs"
+          ]
+        },
+        {
+          "text": "baml.json.json maps to serde_json::Value and is special-cased in analyze.rs (has_serde) and translate_ty.rs; the two must agree or json fields lose serde derives or are skipped again (history 51fb016 - analyze.rs:561, translate_ty.rs:81,277).",
+          "files": [
+            "baml_language/sdks/rust/sdkgen_rust/src/analyze.rs",
+            "baml_language/sdks/rust/sdkgen_rust/src/translate_ty.rs",
+            "baml_language/sdks/rust/sdkgen_rust/src/lib.rs"
+          ]
+        },
+        {
+          "text": "The C# host requires the bridge function table at exactly ABI revision 5; changing the table without bumping the revision in every SDK makes hosts load a mismatched bridge (sdks/csharp/ABI.md:12,222).",
+          "files": [
+            "baml_language/sdks/csharp/**"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lang-workspace",
+      "title": "baml_language workspace root: Cargo/mise/clippy configs, docs, wrapper (baml-native CLI wrapper) and its tests, tools (type quiz, speedtest), vendored forks, cargo-stow and size-gate tool crates",
+      "files": [
+        "baml_language/*",
+        "baml_language/.cargo/**",
+        "baml_language/.ci/**",
+        "baml_language/.claude/**",
+        "baml_language/.config/**",
+        "baml_language/.obsidian/**",
+        "baml_language/.vscode/**",
+        "baml_language/architecture/**",
+        "baml_language/clippy-wasm/**",
+        "baml_language/demo2/**",
+        "baml_language/examples/**",
+        "baml_language/forks/**",
+        "baml_language/scripts/**",
+        "baml_language/tools/**",
+        "baml_language/tools_sccache/**",
+        "baml_language/vendor/**",
+        "baml_language/wrapper/**",
+        "baml_language/wrapper_tests/**",
+        "baml_language/crates/tools_size_gate/**",
+        "baml_language/crates/tools_stow/**"
+      ],
+      "checks": [
+        {
+          "run": "cd baml_language && mise run fmt",
+          "why": "cargo fmt with Crate import granularity (mise.toml:9-11)"
+        },
+        {
+          "run": "cd baml_language && cargo run -p cargo-stow -- stow --fix",
+          "why": "workspace crate organization (mise.toml stow, pre-commit cargo-stow)"
+        }
+      ],
+      "risks": [
+        {
+          "text": "Changing the wrapper package changes what nightly and canary releases require: wrapper candidates are built only on canary and a changed wrapper version is detected against the pkg.boundaryml.com manifest (RELEASING.md:67-76; release-baml-language.yml:267-284).",
+          "files": [
+            "baml_language/wrapper/**",
+            "baml_language/wrapper_tests/**"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "release",
+      "title": "Release pipeline: GitHub workflows, platform contract (release/platforms.json), install/packaging scripts and the artifact fingerprint check",
+      "files": [
+        "release/**",
+        "scripts/**",
+        "tools/release-fingerprints/**",
+        ".github/**",
+        "packaging/**",
+        "ci/**"
+      ],
+      "checks": [
+        {
+          "run": "python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v",
+          "why": "release platform, manifest, version and installer scripts (ci.yaml:572)"
+        },
+        {
+          "run": "prek run --all-files",
+          "why": "all pre-commit hooks (docs/git-hooks.md)"
+        }
+      ],
+      "risks": [
+        {
+          "text": "Nightly releases run build-baml-wrapper as a no-op and the fingerprint check is invoked with --allow_missing baml-wrapper-candidates; canary still requires them, so a new workflow condition or artifact family has to be changed in both the workflow and release-fingerprints (history a2ff141 - `enabled` at release-baml-language.yml:423 and --allow_missing at :655; main.baml:241,290 accepts only one missing family name).",
+          "files": [
+            ".github/workflows/release-baml-language.yml",
+            "tools/release-fingerprints/**"
+          ]
+        },
+        {
+          "text": "Every artifact family a release uploads needs a Family entry (Fingerprinted or Unfingerprinted with a reason) and a place in the expected list at the bottom of main.baml, or the fingerprint check fails the release (history 857c3f2 - tools/release-fingerprints/baml_src/main.baml:88-102,320-335).",
+          "files": [
+            "tools/release-fingerprints/baml_src/main.baml"
+          ]
+        },
+        {
+          "text": "Build images must come through the GCP ghcr-cache prefix; replacing literal ghcr.io in workflow YAML misses the maturin and cross-rs 0.2.5 implicit defaults, and the CROSS_CONFIG of the toolchain and wrapper jobs overrides Cross.toml (docs/ci-infra-gcp.md; the image = lines at baml_language/Cross.toml:18,24; release/platforms.json).",
+          "files": [
+            "release/platforms.json",
+            ".github/workflows/build2-*.yaml"
+          ]
+        },
+        {
+          "text": "cross forwards only the environment variables listed in Cross.toml passthrough (BAML_GIT_SHA, RUSTFLAGS, CFLAGS, CXXFLAGS); a new variable the build needs, such as the source fingerprint, never reaches the compiler inside the container unless listed (baml_language/Cross.toml:21,27 passthrough lines).",
+          "files": [
+            ".github/workflows/build2-*.yaml"
+          ]
+        },
+        {
+          "text": "docs/ci-infra-gcp.md describes a manually provisioned cache repository (no IaC); its administrative gcloud commands are provisioning history, not CI steps, and must not be run to \"refresh\" a working repository (docs/ci-infra-gcp.md \"Administrative setup\").",
+          "files": [
+            "docs/ci-infra-gcp.md"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tools",
+      "title": "Developer and release helper tools: atb2, bctl, sccache wrapper, nightly selection, version bumping, hooks, sdk-parity-lint, sheep-council, stdlib-matrix, pkg.boundaryml.com",
+      "files": [
+        "tools/*",
+        "tools/atb2/**",
+        "tools/bctl_src/**",
+        "tools/hooks/**",
+        "tools/pkg_boundaryml_com/**",
+        "tools/sdk-parity-lint/**",
+        "tools/sheep-council/**",
+        "tools/stdlib-matrix/**",
+        "tools/versions/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "engine-generators",
+      "title": "Language client generators for BAML v0 and the per-type fixture projects under engine/generators/data",
+      "files": [
+        "engine/generators/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "engine",
+      "title": "Legacy BAML v0 Rust workspace (compiler, runtime, language clients, language server, wasm schema); v0-only changes are excluded from v1 release notes",
+      "files": [
+        "engine/*",
+        "engine/.cargo/**",
+        "engine/.claude/**",
+        "engine/.docker/**",
+        "engine/baml-compiler/**",
+        "engine/baml-ids/**",
+        "engine/baml-lib/**",
+        "engine/baml-lsp-types/**",
+        "engine/baml-rpc/**",
+        "engine/baml-runtime/**",
+        "engine/baml-schema-wasm/**",
+        "engine/baml-viz-events/**",
+        "engine/baml-vm/**",
+        "engine/baml_cffi_macros/**",
+        "engine/boundary-udf/**",
+        "engine/bstd/**",
+        "engine/cli/**",
+        "engine/language_client_cffi/**",
+        "engine/language_client_go/**",
+        "engine/language_client_python/**",
+        "engine/language_client_ruby/**",
+        "engine/language_client_typescript/**",
+        "engine/language_server/**",
+        "engine/llm-response-parser/**",
+        "engine/playground-server/**",
+        "engine/sandbox/**",
+        "engine/tools/**",
+        "engine/vendored/**",
+        "engine/zed/**"
+      ],
+      "checks": [
+        {
+          "run": "cd engine && cargo test --lib",
+          "why": "Rust unit tests; required after any Rust change here (.cursor/rules/instructions.mdc)"
+        },
+        {
+          "run": "cd engine && cargo fmt -- --config imports_granularity=\"Crate\" --config group_imports=\"StdExternalCrate\"",
+          "why": "formatting expected for engine Rust files (.cursor/rules/instructions.mdc)"
+        }
+      ],
+      "risks": [
+        {
+          "text": "Engine releases are tag-driven: the <version>-engine tag must sit on the tested canary head and must never be moved or recreated, and every tools/versions/*.cfg plus the changelog must agree on the version (engine/RELEASING.md:11,28).",
+          "files": [
+            "engine/RELEASING.md",
+            "tools/versions/**"
+          ]
+        },
+        {
+          "text": "engine/baml-compiler/CLAUDE.md is stale: it names /home/greghale/code/baml, ../../tools/build (no such tool under engine/tools) and crates like baml-vm; do not trust its paths or commands.",
+          "files": [
+            "engine/baml-compiler/CLAUDE.md"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ts2-website",
+      "title": "boundaryml.com marketing site and blog (Next.js 15, Biome), including the blog-releases changelog posts",
+      "files": [
+        "typescript2/app-website/**"
+      ],
+      "checks": [
+        {
+          "run": "cd typescript2/app-website && pnpm run typecheck",
+          "why": "tsc --noEmit (package.json:136)"
+        },
+        {
+          "run": "cd typescript2/app-website && pnpm run test",
+          "why": "monarch grammar tests (package.json:135)"
+        },
+        {
+          "run": "cd typescript2/app-website && pnpm run format",
+          "why": "Biome formatting (package.json:129)"
+        }
+      ],
+      "risks": [
+        {
+          "text": "A blog post is hidden if its frontmatter has isPublished: false and otherwise appears once its date passes in Pacific time; release todo checklists in blog-releases must keep isPublished: false or the internal follow-up list is served as a post (docs/prepare-changelog.md; app/(home)/blog/_lib/get-posts.ts:81-98; blog/[slug]/page.tsx:138).",
+          "files": [
+            "typescript2/app-website/app/(home)/blog/**",
+            "typescript2/app-website/blog-releases/**"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ts2-beps",
+      "title": "BEPs (BAML enhancement proposals) web app on Next.js and Convex",
+      "files": [
+        "typescript2/app-beps/**"
+      ],
+      "checks": [
+        {
+          "run": "cd typescript2/app-beps && pnpm run lint",
+          "why": "eslint (package.json scripts)"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "typescript2",
+      "title": "Newer TypeScript monorepo packages and apps: playground, grammar, VS Code extension, editor, docs app, product metrics, type quiz, speedtest",
+      "files": [
+        "typescript2/*",
+        "typescript2/app-developer-docs/**",
+        "typescript2/app-feedback/**",
+        "typescript2/app-fiddleproxy/**",
+        "typescript2/app-product-metrics/**",
+        "typescript2/app-promptfiddle/**",
+        "typescript2/app-speedtest/**",
+        "typescript2/app-stdlib-matrix/**",
+        "typescript2/app-type-quiz/**",
+        "typescript2/app-vscode-ext/**",
+        "typescript2/app-vscode-webview/**",
+        "typescript2/pkg-editor/**",
+        "typescript2/pkg-grammar/**",
+        "typescript2/pkg-grammar-hljs/**",
+        "typescript2/pkg-grammar-treesitter/**",
+        "typescript2/pkg-lsp/**",
+        "typescript2/pkg-playground/**",
+        "typescript2/pkg-proto/**",
+        "typescript2/scripts/**"
+      ],
+      "checks": [
+        {
+          "run": "node typescript2/pkg-grammar/scripts/sync.mjs --check",
+          "why": "tmLanguage grammar has a single source (pre-commit grammar-single-source)"
+        }
+      ],
+      "risks": [
+        {
+          "text": "The tmLanguage and language-configuration files exist in pkg-grammar and in app-vscode-ext; edit only the pkg-grammar source and run its sync script, or the pre-commit grammar-single-source check fails (.pre-commit-config.yaml grammar-single-source).",
+          "files": [
+            "typescript2/pkg-grammar/**",
+            "typescript2/app-vscode-ext/**"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "typescript",
+      "title": "Legacy v0 TypeScript monorepo (fiddle web app, VS Code extension, playground packages)",
+      "files": [
+        "typescript/**"
+      ],
+      "checks": [
+        {
+          "run": "pnpm run typecheck",
+          "why": "turbo typecheck over the workspace (package.json)"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "integ-tests",
+      "title": "Cross-language integration tests of the v0 clients; they call real LLM functions defined in integ-tests/baml_src",
+      "files": [
+        "integ-tests/**"
+      ],
+      "checks": [
+        {
+          "run": "cd integ-tests && ./run-tests.sh",
+          "why": "TypeScript, Python and Ruby suites in turn"
+        }
+      ],
+      "risks": [
+        {
+          "text": "Every time integ-tests/baml_src changes the clients must be regenerated (e.g. `uv run baml-cli generate --from ../baml_src` in integ-tests/python after maturin develop) or tests run against stale generated code (.cursor/rules/instructions.mdc; integ-tests/run-tests.sh).",
+          "files": [
+            "integ-tests/**"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "docs",
+      "title": "Release-changelog preparation notes (prepare-changelog and step1a..step2b audit files), git hooks and CI infra docs",
+      "files": [
+        "docs/**"
+      ],
+      "checks": [],
+      "risks": [
+        {
+          "text": "The step1a/1b/2a/2b files are working output of one release audit (BAML 0.23.0, fixed SHAs), not living docs; regenerate them per docs/prepare-changelog.md for a new release instead of editing them.",
+          "files": [
+            "docs/step*.md"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fern",
+      "title": "Fern documentation site for BAML v0 (guides, examples, reference, openapi)",
+      "files": [
+        "fern/**"
+      ],
+      "checks": [
+        {
+          "run": "cd fern && pnpm run dev",
+          "why": "local docs server (fern/package.json)"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "documents",
+      "title": "Open design concerns for profiling (not approved changes)",
+      "files": [
+        "documents/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "baml",
+      "title": "Go package stub required to be named baml for go.mod (no logic)",
+      "files": [
+        ".baml/**",
+        "baml/**"
+      ],
+      "checks": [
+        {
+          "run": "go test ./...",
+          "why": "Go tests (go.mod)"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "baml-cli",
+      "title": "Go package stub required to be named baml-cli for go.mod (no logic)",
+      "files": [
+        "baml-cli/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "claude",
+      "title": "Claude Code project settings (enabled plugins)",
+      "files": [
+        ".claude/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "codex",
+      "title": "Codex environment configuration",
+      "files": [
+        ".codex/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "cursor",
+      "title": "Cursor rules: contributor instructions, Diataxis docs style, jj commit workflow",
+      "files": [
+        ".cursor/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "devcontainer",
+      "title": "Devcontainer image and settings",
+      "files": [
+        ".devcontainer/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "jetbrains",
+      "title": "JetBrains plugin (Gradle/Kotlin)",
+      "files": [
+        "jetbrains/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "jobs",
+      "title": "Hiring pages",
+      "files": [
+        "jobs/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "languages",
+      "title": "Published C# and Rust language package shells",
+      "files": [
+        "languages/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "patches",
+      "title": "pnpm patch for vite-plugin-wasm (inline wasm as base64), applied through package.json patchedDependencies",
+      "files": [
+        "patches/**"
+      ],
+      "checks": [],
+      "risks": [
+        {
+          "text": "The patch is bound to vite-plugin-wasm@3.3.0 in the root package.json pnpm.patchedDependencies; upgrading the plugin without updating the patch breaks the VS Code build (package.json).",
+          "files": [
+            "patches/**"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "skills",
+      "title": "Agent skill (baml-core SKILL.md) compiled into baml-cli",
+      "files": [
+        "skills/**"
+      ],
+      "checks": [
+        {
+          "run": "cd baml_language && cargo nextest run -p baml_cli",
+          "why": "agent install and skill example e2e tests"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "task",
+      "title": "Scoping and handoff notes for baml query and profiling backend (plans, not shipped behavior)",
+      "files": [
+        "TASK/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "vscode",
+      "title": "VS Code workspace launch, tasks and settings",
+      "files": [
+        ".vscode/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "root",
+      "title": "Repo root configs: mise, pnpm/turbo workspace, pre-commit, contributor docs, nix flake, telemetry notes",
+      "files": [
+        ".actrc",
+        ".dockerignore",
+        ".envrc",
+        ".gitattributes",
+        ".gitconfig",
+        ".gitignore",
+        ".infisical.json",
+        ".mcp.json",
+        ".pre-commit-config.yaml",
+        ".vercelignore",
+        "CHANGELOG.md",
+        "CITATION.cff",
+        "CODETURTLE.md",
+        "CONTRACTS.md",
+        "CONTRIBUTING.md",
+        "LICENSE",
+        "README-DEV.md",
+        "README.md",
+        "README.v0.md",
+        "TELEMETRY.md",
+        "baml_language.code-workspace",
+        "cliff.toml",
+        "codecov.yml",
+        "flake.lock",
+        "flake.nix",
+        "go.mod",
+        "go.sum",
+        "justfile",
+        "mise.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "root-wasm32.code-workspace",
+        "root.code-workspace",
+        "turbo.json"
+      ],
+      "checks": [
+        {
+          "run": "prek run --all-files",
+          "why": "all pre-commit hooks (docs/git-hooks.md)"
+        }
+      ],
+      "risks": []
+    }
+  ],
+  "rules": [
+    {
+      "id": "diagnostic-two-places",
+      "rule": "A new type-error variant is registered both in baml_compiler2_hir_ty diagnostics.rs and in baml_db check.rs.",
+      "why": "Missing either loses or mislabels the compiler diagnostic users see.",
+      "files": [
+        "baml_language/crates/baml_compiler2_hir_ty/src/diagnostics.rs",
+        "baml_language/crates/baml_db/src/check.rs"
+      ],
+      "checks": [
+        {
+          "run": "cd baml_language && cargo nextest run -p baml_tests"
+        }
+      ]
+    },
+    {
+      "id": "bamltest-placement",
+      "rule": "Behavior tests go in baml_tests/baml_src/ns_* as BAML test blocks; compile-error tests go in projects/diagnostic_errors or broken_syntax; Rust tests only for what BAML cannot observe.",
+      "why": "The corpus compiles once; each Rust test pays a full stdlib compile, which made the old suite cost about 23 CPU minutes.",
+      "files": [
+        "baml_language/crates/baml_tests/**"
+      ],
+      "checks": [
+        {
+          "run": "cd baml_language && cargo nextest run -p baml_tests"
+        }
+      ]
+    },
+    {
+      "id": "stdlib-formatted",
+      "rule": "BAML files under baml_builtins2/baml_std stay formatted by baml fmt.",
+      "why": "The pre-commit baml-fmt-stdlib hook rejects the commit and unformatted stdlib diverges for everyone.",
+      "files": [
+        "baml_language/crates/baml_builtins2/baml_std/**"
+      ],
+      "checks": [
+        {
+          "run": "cd baml_language && mise run fmt-stdlib"
+        }
+      ]
+    },
+    {
+      "id": "wasm-no-system-time",
+      "rule": "Crates built for wasm do not use std::time::SystemTime or Instant.",
+      "why": "Those calls panic or fail to build on wasm32, breaking the web and playground SDKs; clippy-wasm enforces it.",
+      "files": [
+        "baml_language/crates/**"
+      ],
+      "checks": [
+        {
+          "run": "cd baml_language && mise run clippy-wasm"
+        }
+      ]
+    },
+    {
+      "id": "env-through-baml-env",
+      "rule": "Runtime code reads the environment through baml_env::os_var; clippy rejects std::env::var, var_os, vars and vars_os via disallowed-methods.",
+      "why": "Env access is centralized in baml_env (the HTTP client cache key is built from it), so a direct read bypasses that and fails mise run clippy.",
+      "files": [
+        "baml_language/crates/**"
+      ],
+      "checks": [
+        {
+          "run": "cd baml_language && mise run clippy"
+        }
+      ]
+    },
+    {
+      "id": "telemetry-never-fails-load",
+      "rule": "A telemetry configuration or delivery problem warns and disables recording; it never fails startup or blocks shutdown beyond the bounded timeout.",
+      "why": "SDK load or process exit would break for users with a bad level, key, URL or unreachable endpoint.",
+      "files": [
+        "baml_language/crates/bex_engine/src/telemetry.rs",
+        "baml_language/crates/btel_bcs/**"
+      ]
+    },
+    {
+      "id": "bridge-abi-revision",
+      "rule": "Changing the bridge function table bumps the ABI revision in every SDK host.",
+      "why": "Hosts require the exact revision and refuse to load a mismatched bridge.",
+      "files": [
+        "baml_language/sdks/**"
+      ]
+    },
+    {
+      "id": "release-fingerprint-family",
+      "rule": "Every artifact family a release uploads has a Family entry in release-fingerprints main.baml and carries the source fingerprint.",
+      "why": "The fingerprint check in release-baml-language.yml fails the whole release.",
+      "files": [
+        "tools/release-fingerprints/**",
+        ".github/workflows/build2-*.yaml"
+      ]
+    },
+    {
+      "id": "images-via-ghcr-cache",
+      "rule": "Release build images are pulled through the us-central1 ghcr-cache prefix, using upstream tags.",
+      "why": "Direct ghcr.io pulls bring back GHCR rate and availability failures in release CI.",
+      "files": [
+        "baml_language/Cross.toml",
+        "release/platforms.json"
+      ]
+    },
+    {
+      "id": "grammar-single-source",
+      "rule": "The TextMate grammar and language configuration are edited only in typescript2/pkg-grammar and synced to the VS Code extension.",
+      "why": "The pre-commit grammar-single-source check fails and the editor copies drift.",
+      "files": [
+        "typescript2/pkg-grammar/**",
+        "typescript2/app-vscode-ext/**"
+      ],
+      "checks": [
+        {
+          "run": "node typescript2/pkg-grammar/scripts/sync.mjs --check"
+        }
+      ]
+    }
+  ],
+  "ignore": []
+}
